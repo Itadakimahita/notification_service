@@ -16,4 +16,31 @@ message NotificationRequested {
   int64 send_at = 9;
   int64 expires_at = 10;
   int64 created_at = 11;
+  bool released = 12;
+}
+
+message DispatchMessage {
+  string notification_id = 1;
+  string producer = 2;
+  string user_id = 3;
+  string channel = 4;
+  string target = 5;
+  string platform = 6;
+  string title = 7;
+  string body = 8;
+  string category = 9;
+  string priority = 10;
+  int64 expires_at = 11;
+  int64 created_at = 12;
+  int32 attempt = 13;
+}
+
+message StatusEvent {
+  string notification_id = 1;
+  string channel = 2;
+  string status = 3;
+  string detail = 4;
+  string provider = 5;
+  int32 attempt = 6;
+  int64 at = 7;
 }

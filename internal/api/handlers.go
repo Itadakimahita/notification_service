@@ -28,14 +28,16 @@ type Store interface {
 }
 
 type Server struct {
-	store Store
-	auth  *Auth
-	now   func() time.Time
+	store     Store
+	users     Users
+	templates Templates
+	auth      *Auth
+	now       func() time.Time
 }
 
 // NewServer builds the API server.
-func NewServer(store Store, auth *Auth) *Server {
-	return &Server{store: store, auth: auth, now: time.Now}
+func NewServer(store Store, users Users, templates Templates, auth *Auth) *Server {
+	return &Server{store: store, users: users, templates: templates, auth: auth, now: time.Now}
 }
 
 // Router returns the HTTP handler tree.
@@ -47,6 +49,11 @@ func (s *Server) Router() http.Handler {
 		r.Post("/v1/notifications", s.create)
 		r.Post("/v1/notifications/batch", s.batch)
 		r.Get("/v1/notifications/{id}", s.get)
+		r.Put("/v1/users/{id}", s.putProfile)
+		r.Put("/v1/users/{id}/preferences", s.putPreferences)
+		r.Post("/v1/users/{id}/devices", s.addDevice)
+		r.Delete("/v1/users/{id}/devices/{device_id}", s.removeDevice)
+		r.Post("/v1/templates", s.putTemplate)
 	})
 	return r
 }

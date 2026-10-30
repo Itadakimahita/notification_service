@@ -15,6 +15,7 @@ import (
 const (
 	TopicRequested = "notifications.requested"
 	TopicStatus    = "notifications.status"
+	TopicDLQRouter = "notifications.dlq.router"
 )
 
 var RetryTiers = []time.Duration{5 * time.Second, 30 * time.Second, 5 * time.Minute, 30 * time.Minute}
@@ -46,6 +47,7 @@ func AllTopics() []TopicSpec {
 	specs := []TopicSpec{
 		{TopicRequested, 48, week},
 		{TopicStatus, 24, week},
+		{TopicDLQRouter, 6, 2 * week},
 	}
 	for _, c := range domain.Channels {
 		specs = append(specs,

@@ -8,15 +8,19 @@ import (
 	"strings"
 	"time"
 
+	"github.com/redis/go-redis/v9"
+
 	"notification-service/internal/api"
 	"notification-service/internal/app"
 	"notification-service/internal/config"
 	"notification-service/internal/store/dynamo"
+	"notification-service/internal/users"
 )
 
 type cfg struct {
 	config.Base
 	config.Dynamo
+	config.Redis
 	Addr        string  `env:"API_ADDR" envDefault:":8080"`
 	APIKeys     string  `env:"API_KEYS" envDefault:"demo:demo-key"`
 	ProducerRPS float64 `env:"PRODUCER_RPS" envDefault:"5000"`
@@ -51,11 +55,16 @@ func main() {
 		if err != nil {
 			return err
 		}
-		repo = dynamo.NewNotifications(dynamo.NewClient(awsCfg, c.Dynamo), dynamo.NewTables(c.TablePrefix))
+		db := dynamo.NewClient(awsCfg, c.Dynamo)
+		tables := dynamo.NewTables(c.TablePrefix)
+		repo = dynamo.NewNotifications(db, tables)
+		rdb := redis.NewClient(&redis.Options{Addr: c.Addr})
+		defer rdb.Close()
+		userSvc := users.NewService(dynamo.NewUsers(db, tables), rdb, 5*time.Minute)
 
 		srv := &http.Server{
 			Addr:              c.Addr,
-			Handler:           api.NewServer(repo, api.NewAuth(keys, c.ProducerRPS, c.ProducerBst)).Router(),
+			Handler:           api.NewServer(repo, userSvc, dynamo.NewTemplates(db, tables), api.NewAuth(keys, c.ProducerRPS, c.ProducerBst)).Router(),
 			ReadHeaderTimeout: 5 * time.Second,
 		}
 		go func() {

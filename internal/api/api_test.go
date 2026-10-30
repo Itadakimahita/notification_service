@@ -64,7 +64,7 @@ func do(t *testing.T, h http.Handler, method, path, key, idem, body string) *htt
 func newHandler() (http.Handler, *fakeStore) {
 	st := newFake()
 	auth := NewAuth(map[string]string{"k1": "p1", "k2": "p2"}, 1000, 1000)
-	return NewServer(st, auth).Router(), st
+	return NewServer(st, nil, nil, auth).Router(), st
 }
 
 const validBody = `{"user_id":"u1","template_id":"otp","category":"transactional","data":{"code":"123"}}`
@@ -130,7 +130,67 @@ func TestBatchReportsPerItem(t *testing.T) {
 
 func TestRateLimit(t *testing.T) {
 	st := newFake()
-	h := NewServer(st, NewAuth(map[string]string{"k": "p"}, 0.001, 1)).Router()
+	h := NewServer(st, nil, nil, NewAuth(map[string]string{"k": "p"}, 0.001, 1)).Router()
 	require.Equal(t, 202, do(t, h, "POST", "/v1/notifications", "k", "", validBody).Code)
 	require.Equal(t, 429, do(t, h, "POST", "/v1/notifications", "k", "", validBody).Code)
+}
+
+type fakeUsers struct {
+	profiles map[string]domain.Profile
+	prefs    []domain.Preference
+	devices  map[string]string
+}
+
+func (f *fakeUsers) PutProfile(_ context.Context, p domain.Profile) error {
+	f.profiles[p.UserID] = p
+	return nil
+}
+
+func (f *fakeUsers) PutPreferences(_ context.Context, _ string, p []domain.Preference) error {
+	f.prefs = append(f.prefs, p...)
+	return nil
+}
+
+func (f *fakeUsers) PutDevice(_ context.Context, _ string, d domain.Device) (string, error) {
+	f.devices["d1"] = d.Token
+	return "d1", nil
+}
+
+func (f *fakeUsers) DeleteDevice(_ context.Context, _, id string) error {
+	delete(f.devices, id)
+	return nil
+}
+
+type fakeTemplates struct{}
+
+func (fakeTemplates) Put(_ context.Context, t domain.Template) (domain.Template, error) {
+	t.Version = 1
+	return t, nil
+}
+
+func TestUserEndpoints(t *testing.T) {
+	users := &fakeUsers{profiles: map[string]domain.Profile{}, devices: map[string]string{}}
+	h := NewServer(newFake(), users, fakeTemplates{}, NewAuth(map[string]string{"k": "p"}, 1000, 1000)).Router()
+
+	require.Equal(t, 204, do(t, h, "PUT", "/v1/users/u1", "k", "", `{"locale":"kk","timezone":"Asia/Almaty","email":"a@b.c"}`).Code)
+	require.Equal(t, "kk", users.profiles["u1"].Locale)
+	require.Equal(t, 400, do(t, h, "PUT", "/v1/users/u1", "k", "", `{"timezone":"Mars/Base"}`).Code)
+
+	require.Equal(t, 204, do(t, h, "PUT", "/v1/users/u1/preferences", "k", "", `{"preferences":[{"category":"marketing","channel":"push","enabled":true,"quiet_start":"22:00","quiet_end":"08:00"}]}`).Code)
+	require.Len(t, users.prefs, 1)
+	require.Equal(t, 400, do(t, h, "PUT", "/v1/users/u1/preferences", "k", "", `{"preferences":[{"category":"marketing","channel":"push","enabled":true,"quiet_start":"25:00","quiet_end":"08:00"}]}`).Code)
+	require.Equal(t, 400, do(t, h, "PUT", "/v1/users/u1/preferences", "k", "", `{"preferences":[{"category":"x","channel":"push","enabled":true}]}`).Code)
+
+	rec := do(t, h, "POST", "/v1/users/u1/devices", "k", "", `{"token":"abc","platform":"ios"}`)
+	require.Equal(t, 201, rec.Code)
+	require.Equal(t, 400, do(t, h, "POST", "/v1/users/u1/devices", "k", "", `{"token":"abc","platform":"palm"}`).Code)
+	require.Equal(t, 204, do(t, h, "DELETE", "/v1/users/u1/devices/d1", "k", "", "").Code)
+	require.Empty(t, users.devices)
+}
+
+func TestTemplateEndpointValidatesSyntax(t *testing.T) {
+	h := NewServer(newFake(), nil, fakeTemplates{}, NewAuth(map[string]string{"k": "p"}, 1000, 1000)).Router()
+	require.Equal(t, 201, do(t, h, "POST", "/v1/templates", "k", "", `{"template_id":"otp","channel":"sms","body":"code {{.code}}"}`).Code)
+	require.Equal(t, 400, do(t, h, "POST", "/v1/templates", "k", "", `{"template_id":"otp","channel":"sms","body":"code {{.code"}`).Code)
+	require.Equal(t, 400, do(t, h, "POST", "/v1/templates", "k", "", `{"template_id":"otp","channel":"fax","body":"x"}`).Code)
 }
