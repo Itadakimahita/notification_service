@@ -90,6 +90,13 @@ services:
       interval: 5s
       retries: 10
 
+  s3:
+    image: adobe/s3mock:4.7.0
+    ports: ["9300:9090"]
+    environment:
+      COM_ADOBE_TESTING_S3MOCK_STORE_INITIAL_BUCKETS: notif-campaigns
+      COM_ADOBE_TESTING_S3MOCK_STORE_RETAIN_FILES_ON_EXIT: "false"
+
   mailpit:
     image: axllent/mailpit:v1.21
     ports: ["1025:1025", "8025:8025"]

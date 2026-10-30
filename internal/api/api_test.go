@@ -228,3 +228,57 @@ func TestInboxEndpoints(t *testing.T) {
 	require.True(t, inbox.read["1_n"])
 	require.Equal(t, 404, do(t, h, "POST", "/v1/users/u1/inbox/zzz/read", "k", "", "").Code)
 }
+
+type fakeCampaigns struct {
+	c       *dynamo.Campaign
+	allowed map[dynamo.CampaignStatus]bool
+}
+
+func (f *fakeCampaigns) Create(_ context.Context, c *dynamo.Campaign) error { f.c = c; return nil }
+func (f *fakeCampaigns) Get(_ context.Context, id string) (*dynamo.Campaign, error) {
+	if f.c == nil || f.c.ID != id {
+		return nil, dynamo.ErrNotFound
+	}
+	return f.c, nil
+}
+func (f *fakeCampaigns) SetStatus(_ context.Context, _ string, from []dynamo.CampaignStatus, to dynamo.CampaignStatus, _ string) error {
+	for _, s := range from {
+		if f.c.Status == s {
+			f.c.Status = to
+			return nil
+		}
+	}
+	return dynamo.ErrBadTransition
+}
+
+type fakeBlob struct{}
+
+func (fakeBlob) PresignPut(_ context.Context, key string, _ time.Duration) (string, error) {
+	return "http://s3/" + key, nil
+}
+
+func TestCampaignLifecycleEndpoints(t *testing.T) {
+	fc := &fakeCampaigns{}
+	h := NewServer(Deps{Store: newFake(), Campaigns: fc, Blob: fakeBlob{}, Auth: NewAuth(map[string]string{"k": "p"}, 1000, 1000)}).Router()
+
+	require.Equal(t, 400, do(t, h, "POST", "/v1/campaigns", "k", "", `{"name":"","template_id":"t"}`).Code)
+	require.Equal(t, 400, do(t, h, "POST", "/v1/campaigns", "k", "", `{"name":"n","template_id":"t","rate_per_sec":999999}`).Code)
+	require.Equal(t, 400, do(t, h, "POST", "/v1/campaigns", "k", "", `{"name":"n","template_id":"t","channels":["fax"]}`).Code)
+
+	rec := do(t, h, "POST", "/v1/campaigns", "k", "", `{"name":"spring","template_id":"promo","channels":["push","email"]}`)
+	require.Equal(t, 201, rec.Code)
+	require.Contains(t, rec.Body.String(), "upload_url")
+	require.Equal(t, "marketing", fc.c.Category)
+	require.Equal(t, 1000, fc.c.RatePerSec)
+	id := fc.c.ID
+
+	require.Equal(t, 409, do(t, h, "POST", "/v1/campaigns/"+id+"/pause", "k", "", "").Code, "cannot pause a draft")
+	require.Equal(t, 200, do(t, h, "POST", "/v1/campaigns/"+id+"/start", "k", "", "").Code)
+	require.Equal(t, 409, do(t, h, "POST", "/v1/campaigns/"+id+"/start", "k", "", "").Code)
+	require.Equal(t, 200, do(t, h, "POST", "/v1/campaigns/"+id+"/pause", "k", "", "").Code)
+	require.Equal(t, 200, do(t, h, "POST", "/v1/campaigns/"+id+"/resume", "k", "", "").Code)
+	require.Equal(t, 200, do(t, h, "POST", "/v1/campaigns/"+id+"/cancel", "k", "", "").Code)
+	require.Equal(t, 409, do(t, h, "POST", "/v1/campaigns/"+id+"/resume", "k", "", "").Code)
+	require.Equal(t, 404, do(t, h, "POST", "/v1/campaigns/nope/start", "k", "", "").Code)
+	require.Equal(t, 200, do(t, h, "GET", "/v1/campaigns/"+id, "k", "", "").Code)
+}

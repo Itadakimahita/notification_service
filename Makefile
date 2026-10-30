@@ -2,6 +2,7 @@ COMPOSE := docker compose -f deploy/compose/docker-compose.yml
 
 export DYNAMO_ENDPOINT ?= http://localhost:8000
 export KAFKA_BROKERS ?= localhost:9092,localhost:9094,localhost:9096
+export S3_ENDPOINT ?= http://localhost:9300
 export REDIS_ADDR ?= localhost:6380
 export OTEL_EXPORTER_OTLP_ENDPOINT ?= localhost:4317
 

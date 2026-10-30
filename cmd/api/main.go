@@ -12,6 +12,7 @@ import (
 
 	"notification-service/internal/api"
 	"notification-service/internal/app"
+	"notification-service/internal/blob"
 	"notification-service/internal/config"
 	"notification-service/internal/store/dynamo"
 	"notification-service/internal/users"
@@ -21,6 +22,7 @@ type cfg struct {
 	config.Base
 	config.Dynamo
 	config.Redis
+	config.S3
 	ListenAddr  string  `env:"API_ADDR" envDefault:":8080"`
 	APIKeys     string  `env:"API_KEYS" envDefault:"demo:demo-key"`
 	ProducerRPS float64 `env:"PRODUCER_RPS" envDefault:"5000"`
@@ -69,6 +71,8 @@ func main() {
 				Users:     userSvc,
 				Templates: dynamo.NewTemplates(db, tables),
 				Inbox:     dynamo.NewInbox(db, tables),
+				Campaigns: dynamo.NewCampaigns(db, tables),
+				Blob:      blob.New(awsCfg, c.S3.Endpoint, c.S3.Bucket),
 				Auth:      api.NewAuth(keys, c.ProducerRPS, c.ProducerBst),
 			}).Router(),
 			ReadHeaderTimeout: 5 * time.Second,

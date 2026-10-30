@@ -26,6 +26,7 @@ type Tables struct {
 	Schedule      string
 	Inbox         string
 	Leases        string
+	Campaigns     string
 }
 
 // NewTables derives all table names from a shared prefix.
@@ -38,6 +39,7 @@ func NewTables(prefix string) Tables {
 		Schedule:      prefix + "schedule",
 		Inbox:         prefix + "inbox",
 		Leases:        prefix + "leases",
+		Campaigns:     prefix + "campaigns",
 	}
 }
 
@@ -57,6 +59,7 @@ func (t Tables) specs() []tableSpec {
 		{name: t.Schedule, sorted: true},
 		{name: t.Inbox, sorted: true, ttl: true},
 		{name: t.Leases},
+		{name: t.Campaigns},
 	}
 }
 

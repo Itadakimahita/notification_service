@@ -8,6 +8,7 @@ import (
 	"github.com/twmb/franz-go/pkg/kadm"
 
 	"notification-service/internal/app"
+	"notification-service/internal/blob"
 	"notification-service/internal/config"
 	"notification-service/internal/kafkax"
 	"notification-service/internal/store/dynamo"
@@ -17,6 +18,7 @@ type cfg struct {
 	config.Base
 	config.Kafka
 	config.Dynamo
+	config.S3
 	Replication int16 `env:"KAFKA_REPLICATION" envDefault:"3"`
 }
 
@@ -39,6 +41,13 @@ func main() {
 			return fmt.Errorf("dynamo: %w", err)
 		}
 		rt.Log.Info("dynamodb tables ready")
+
+		if c.S3.Endpoint != "" {
+			if err := retry(rt.Ctx, func() error { return blob.New(awsCfg, c.S3.Endpoint, c.S3.Bucket).EnsureBucket(rt.Ctx) }); err != nil {
+				return fmt.Errorf("s3: %w", err)
+			}
+			rt.Log.Info("s3 bucket ready", "bucket", c.S3.Bucket)
+		}
 
 		kc, err := kafkax.NewClient(c.Brokers)
 		if err != nil {

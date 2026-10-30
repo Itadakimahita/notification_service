@@ -5,8 +5,6 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/google/uuid"
-
 	"notification-service/internal/domain"
 )
 
@@ -66,22 +64,7 @@ func (r createRequest) build(producer string, now time.Time) (*domain.Notificati
 		return nil, errors.New("data exceeds 16KB")
 	}
 
-	n := &domain.Notification{
-		ID:         uuid.Must(uuid.NewV7()).String(),
-		Producer:   producer,
-		UserID:     r.UserID,
-		TemplateID: r.TemplateID,
-		Category:   r.Category,
-		Priority:   r.Priority,
-		Channels:   channels,
-		Data:       r.Data,
-		CreatedAt:  now.Unix(),
-		Status:     domain.StatusAccepted,
-
-		ChannelStatus: map[string]domain.Status{},
-		ChannelDetail: map[string]string{},
-		ChannelRank:   map[string]int{},
-	}
+	n := domain.NewNotification(producer, r.UserID, r.TemplateID, r.Category, r.Priority, channels, r.Data, now)
 	if r.SendAt != nil {
 		if r.SendAt.After(now.Add(maxScheduleIn)) {
 			return nil, errors.New("send_at is more than 90 days ahead")

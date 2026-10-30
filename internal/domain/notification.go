@@ -1,6 +1,10 @@
 package domain
 
-import "time"
+import (
+	"time"
+
+	"github.com/google/uuid"
+)
 
 const RetentionDays = 30
 
@@ -31,4 +35,15 @@ func (n *Notification) ComputeTTL() {
 		base = n.SendAt
 	}
 	n.TTL = time.Unix(base, 0).Add(RetentionDays * 24 * time.Hour).Unix()
+}
+
+// NewNotification builds an accepted notification with a time-ordered id and initialized status maps.
+func NewNotification(producer, userID, templateID string, cat Category, prio Priority, channels []Channel, data map[string]string, now time.Time) *Notification {
+	n := &Notification{
+		ID: uuid.Must(uuid.NewV7()).String(), Producer: producer, UserID: userID, TemplateID: templateID,
+		Category: cat, Priority: prio, Channels: channels, Data: data, CreatedAt: now.Unix(), Status: StatusAccepted,
+		ChannelStatus: map[string]Status{}, ChannelDetail: map[string]string{}, ChannelRank: map[string]int{},
+	}
+	n.ComputeTTL()
+	return n
 }

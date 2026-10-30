@@ -23,6 +23,11 @@ type Redis struct {
 	Addr string `env:"REDIS_ADDR" envDefault:"localhost:6380"`
 }
 
+type S3 struct {
+	Endpoint string `env:"S3_ENDPOINT"`
+	Bucket   string `env:"S3_BUCKET" envDefault:"notif-campaigns"`
+}
+
 // Load parses environment variables into a new T.
 func Load[T any]() (T, error) {
 	var c T

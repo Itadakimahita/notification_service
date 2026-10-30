@@ -32,6 +32,8 @@ type Deps struct {
 	Users     Users
 	Templates Templates
 	Inbox     Inbox
+	Campaigns Campaigns
+	Blob      Presigner
 	Auth      *Auth
 }
 
@@ -40,13 +42,15 @@ type Server struct {
 	users     Users
 	templates Templates
 	inbox     Inbox
+	campaigns Campaigns
+	blob      Presigner
 	auth      *Auth
 	now       func() time.Time
 }
 
 // NewServer builds the API server.
 func NewServer(d Deps) *Server {
-	return &Server{store: d.Store, users: d.Users, templates: d.Templates, inbox: d.Inbox, auth: d.Auth, now: time.Now}
+	return &Server{store: d.Store, users: d.Users, templates: d.Templates, inbox: d.Inbox, campaigns: d.Campaigns, blob: d.Blob, auth: d.Auth, now: time.Now}
 }
 
 // Router returns the HTTP handler tree.
@@ -63,6 +67,11 @@ func (s *Server) Router() http.Handler {
 		r.Post("/v1/users/{id}/devices", s.addDevice)
 		r.Delete("/v1/users/{id}/devices/{device_id}", s.removeDevice)
 		r.Post("/v1/templates", s.putTemplate)
+		r.Post("/v1/campaigns", s.createCampaign)
+		r.Get("/v1/campaigns/{id}", s.getCampaign)
+		for _, action := range []string{"start", "pause", "resume", "cancel"} {
+			r.Post("/v1/campaigns/{id}/"+action, s.transition(action))
+		}
 		r.Get("/v1/users/{id}/inbox", s.listInbox)
 		r.Post("/v1/users/{id}/inbox/{item_id}/read", s.markRead)
 	})
