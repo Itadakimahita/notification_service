@@ -57,7 +57,7 @@ func main() {
 		if err != nil {
 			return fmt.Errorf("kafka: %w", err)
 		}
-		defer kc.Close()
+		defer kafkax.Close(kc, 10*time.Second)
 
 		consumer := &router.Consumer{
 			Router: &router.Router{

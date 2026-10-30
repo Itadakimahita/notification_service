@@ -4,7 +4,6 @@ import (
 	"context"
 	"log/slog"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
@@ -35,59 +34,9 @@ type Consumer struct {
 	BatchSize   int
 }
 
-// Run consumes requested events, routes them in parallel batches and commits after outputs are produced.
+// Run consumes requested events, routing them in parallel batches and committing after outputs are produced.
 func (c *Consumer) Run(ctx context.Context) error {
-	for ctx.Err() == nil {
-		fetches := c.Client.PollRecords(ctx, c.BatchSize)
-		if ctx.Err() != nil {
-			break
-		}
-		fetches.EachError(func(t string, p int32, err error) { c.Log.Error("fetch error", "topic", t, "partition", p, "err", err) })
-
-		recs := fetches.Records()
-		if len(recs) == 0 {
-			c.Client.AllowRebalance()
-			continue
-		}
-		if err := c.handleBatch(ctx, recs); err != nil {
-			c.Client.AllowRebalance()
-			return err
-		}
-		if err := c.Client.CommitRecords(ctx, recs...); err != nil && ctx.Err() == nil {
-			c.Log.Error("commit failed", "err", err)
-		}
-		c.Client.AllowRebalance()
-	}
-	return nil
-}
-
-func (c *Consumer) handleBatch(ctx context.Context, recs []*kgo.Record) error {
-	var (
-		mu      sync.Mutex
-		outputs []*kgo.Record
-		wg      sync.WaitGroup
-		sem     = make(chan struct{}, c.Parallelism)
-	)
-	for _, rec := range recs {
-		sem <- struct{}{}
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			defer func() { <-sem }()
-			produced := c.handleRecord(ctx, rec)
-			mu.Lock()
-			outputs = append(outputs, produced...)
-			mu.Unlock()
-		}()
-	}
-	wg.Wait()
-	if ctx.Err() != nil {
-		return nil
-	}
-	if len(outputs) == 0 {
-		return nil
-	}
-	return c.Client.ProduceSync(ctx, outputs...).FirstErr()
+	return kafkax.ProcessBatches(ctx, c.Client, c.BatchSize, c.Parallelism, c.handleRecord, c.Log)
 }
 
 // handleRecord routes one record, retrying infrastructure errors until they clear.

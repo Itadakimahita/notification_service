@@ -4,6 +4,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"os"
+	"strings"
 	"time"
 
 	"github.com/twmb/franz-go/pkg/kadm"
@@ -18,7 +20,25 @@ const (
 	TopicDLQRouter = "notifications.dlq.router"
 )
 
-var RetryTiers = []time.Duration{5 * time.Second, 30 * time.Second, 5 * time.Minute, 30 * time.Minute}
+var RetryTiers = loadRetryTiers()
+
+// loadRetryTiers reads four comma separated delays from RETRY_TIERS, defaulting to 5s,30s,5m,30m.
+func loadRetryTiers() []time.Duration {
+	def := []time.Duration{5 * time.Second, 30 * time.Second, 5 * time.Minute, 30 * time.Minute}
+	parts := strings.Split(os.Getenv("RETRY_TIERS"), ",")
+	if len(parts) != len(def) {
+		return def
+	}
+	out := make([]time.Duration, len(parts))
+	for i, p := range parts {
+		d, err := time.ParseDuration(strings.TrimSpace(p))
+		if err != nil || d <= 0 {
+			return def
+		}
+		out[i] = d
+	}
+	return out
+}
 
 type TopicSpec struct {
 	Name       string
