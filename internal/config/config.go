@@ -5,7 +5,7 @@ import "github.com/caarlos0/env/v11"
 type Base struct {
 	ServiceName  string `env:"SERVICE_NAME"`
 	LogLevel     string `env:"LOG_LEVEL" envDefault:"info"`
-	AdminAddr    string `env:"ADMIN_ADDR" envDefault:":9100"`
+	AdminAddr    string `env:"ADMIN_ADDR"`
 	OTLPEndpoint string `env:"OTEL_EXPORTER_OTLP_ENDPOINT"`
 }
 
