@@ -77,6 +77,10 @@ func (r createRequest) build(producer string, now time.Time) (*domain.Notificati
 		Data:       r.Data,
 		CreatedAt:  now.Unix(),
 		Status:     domain.StatusAccepted,
+
+		ChannelStatus: map[string]domain.Status{},
+		ChannelDetail: map[string]string{},
+		ChannelRank:   map[string]int{},
 	}
 	if r.SendAt != nil {
 		if r.SendAt.After(now.Add(maxScheduleIn)) {

@@ -27,6 +27,9 @@ func (w *statusWriter) WriteHeader(code int) {
 	w.ResponseWriter.WriteHeader(code)
 }
 
+// Unwrap exposes the underlying writer so hijacking and flushing keep working.
+func (w *statusWriter) Unwrap() http.ResponseWriter { return w.ResponseWriter }
+
 // Metrics records request latency per chi route pattern.
 func Metrics(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -51,4 +54,18 @@ func JSON(w http.ResponseWriter, code int, v any) {
 // Error writes a JSON error body.
 func Error(w http.ResponseWriter, code int, msg string) {
 	JSON(w, code, map[string]string{"error": msg})
+}
+
+// MetricsFunc records latency for plain http.Handler muxes keyed by method pattern.
+func MetricsFunc(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		start := time.Now()
+		sw := &statusWriter{ResponseWriter: w, code: http.StatusOK}
+		next.ServeHTTP(sw, r)
+		route := r.Pattern
+		if route == "" {
+			route = "unmatched"
+		}
+		requestDuration.WithLabelValues(r.Method, route, strconv.Itoa(sw.code)).Observe(time.Since(start).Seconds())
+	})
 }

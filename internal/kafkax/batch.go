@@ -10,8 +10,10 @@ import (
 
 type Handler func(ctx context.Context, rec *kgo.Record) []*kgo.Record
 
-// ProcessBatches polls batches, handles records in parallel, produces their outputs, then commits.
-func ProcessBatches(ctx context.Context, cl *kgo.Client, batchSize, parallelism int, handle Handler, log *slog.Logger) error {
+type BatchFunc func(ctx context.Context, recs []*kgo.Record) ([]*kgo.Record, error)
+
+// RunBatches polls batches, lets fn process each one, produces its outputs, then commits.
+func RunBatches(ctx context.Context, cl *kgo.Client, batchSize int, fn BatchFunc, log *slog.Logger) error {
 	defer cl.AllowRebalance()
 	for ctx.Err() == nil {
 		fetches := cl.PollRecords(ctx, batchSize)
@@ -26,6 +28,29 @@ func ProcessBatches(ctx context.Context, cl *kgo.Client, batchSize, parallelism 
 			continue
 		}
 
+		outputs, err := fn(ctx, recs)
+		if err != nil {
+			return err
+		}
+		if ctx.Err() != nil {
+			break
+		}
+		if len(outputs) > 0 {
+			if err := cl.ProduceSync(ctx, outputs...).FirstErr(); err != nil {
+				return err
+			}
+		}
+		if err := cl.CommitRecords(ctx, recs...); err != nil && ctx.Err() == nil {
+			log.Error("commit failed", "err", err)
+		}
+		cl.AllowRebalance()
+	}
+	return nil
+}
+
+// ProcessBatches handles every record of a batch in parallel and collects their outputs.
+func ProcessBatches(ctx context.Context, cl *kgo.Client, batchSize, parallelism int, handle Handler, log *slog.Logger) error {
+	return RunBatches(ctx, cl, batchSize, func(ctx context.Context, recs []*kgo.Record) ([]*kgo.Record, error) {
 		var (
 			mu      sync.Mutex
 			outputs []*kgo.Record
@@ -45,21 +70,6 @@ func ProcessBatches(ctx context.Context, cl *kgo.Client, batchSize, parallelism 
 			}()
 		}
 		wg.Wait()
-		if ctx.Err() != nil {
-			cl.AllowRebalance()
-			break
-		}
-
-		if len(outputs) > 0 {
-			if err := cl.ProduceSync(ctx, outputs...).FirstErr(); err != nil {
-				cl.AllowRebalance()
-				return err
-			}
-		}
-		if err := cl.CommitRecords(ctx, recs...); err != nil && ctx.Err() == nil {
-			log.Error("commit failed", "err", err)
-		}
-		cl.AllowRebalance()
-	}
-	return nil
+		return outputs, nil
+	}, log)
 }

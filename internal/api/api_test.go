@@ -2,6 +2,7 @@ package api
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -64,7 +65,7 @@ func do(t *testing.T, h http.Handler, method, path, key, idem, body string) *htt
 func newHandler() (http.Handler, *fakeStore) {
 	st := newFake()
 	auth := NewAuth(map[string]string{"k1": "p1", "k2": "p2"}, 1000, 1000)
-	return NewServer(st, nil, nil, auth).Router(), st
+	return NewServer(Deps{Store: st, Auth: auth}).Router(), st
 }
 
 const validBody = `{"user_id":"u1","template_id":"otp","category":"transactional","data":{"code":"123"}}`
@@ -130,7 +131,7 @@ func TestBatchReportsPerItem(t *testing.T) {
 
 func TestRateLimit(t *testing.T) {
 	st := newFake()
-	h := NewServer(st, nil, nil, NewAuth(map[string]string{"k": "p"}, 0.001, 1)).Router()
+	h := NewServer(Deps{Store: st, Auth: NewAuth(map[string]string{"k": "p"}, 0.001, 1)}).Router()
 	require.Equal(t, 202, do(t, h, "POST", "/v1/notifications", "k", "", validBody).Code)
 	require.Equal(t, 429, do(t, h, "POST", "/v1/notifications", "k", "", validBody).Code)
 }
@@ -170,7 +171,7 @@ func (fakeTemplates) Put(_ context.Context, t domain.Template) (domain.Template,
 
 func TestUserEndpoints(t *testing.T) {
 	users := &fakeUsers{profiles: map[string]domain.Profile{}, devices: map[string]string{}}
-	h := NewServer(newFake(), users, fakeTemplates{}, NewAuth(map[string]string{"k": "p"}, 1000, 1000)).Router()
+	h := NewServer(Deps{Store: newFake(), Users: users, Templates: fakeTemplates{}, Auth: NewAuth(map[string]string{"k": "p"}, 1000, 1000)}).Router()
 
 	require.Equal(t, 204, do(t, h, "PUT", "/v1/users/u1", "k", "", `{"locale":"kk","timezone":"Asia/Almaty","email":"a@b.c"}`).Code)
 	require.Equal(t, "kk", users.profiles["u1"].Locale)
@@ -189,8 +190,41 @@ func TestUserEndpoints(t *testing.T) {
 }
 
 func TestTemplateEndpointValidatesSyntax(t *testing.T) {
-	h := NewServer(newFake(), nil, fakeTemplates{}, NewAuth(map[string]string{"k": "p"}, 1000, 1000)).Router()
+	h := NewServer(Deps{Store: newFake(), Templates: fakeTemplates{}, Auth: NewAuth(map[string]string{"k": "p"}, 1000, 1000)}).Router()
 	require.Equal(t, 201, do(t, h, "POST", "/v1/templates", "k", "", `{"template_id":"otp","channel":"sms","body":"code {{.code}}"}`).Code)
 	require.Equal(t, 400, do(t, h, "POST", "/v1/templates", "k", "", `{"template_id":"otp","channel":"sms","body":"code {{.code"}`).Code)
 	require.Equal(t, 400, do(t, h, "POST", "/v1/templates", "k", "", `{"template_id":"otp","channel":"fax","body":"x"}`).Code)
+}
+
+type fakeInbox struct{ read map[string]bool }
+
+func (f *fakeInbox) List(_ context.Context, _ string, limit int32, cursor string) ([]dynamo.InboxItem, string, error) {
+	if cursor == "bad" {
+		return nil, "", errors.New("invalid cursor")
+	}
+	return []dynamo.InboxItem{{ID: "1_n", Title: "t", Body: "b"}}, "next", nil
+}
+
+func (f *fakeInbox) MarkRead(_ context.Context, _, id string) error {
+	if id != "1_n" {
+		return dynamo.ErrNotFound
+	}
+	f.read[id] = true
+	return nil
+}
+
+func TestInboxEndpoints(t *testing.T) {
+	inbox := &fakeInbox{read: map[string]bool{}}
+	h := NewServer(Deps{Store: newFake(), Inbox: inbox, Auth: NewAuth(map[string]string{"k": "p"}, 1000, 1000)}).Router()
+
+	rec := do(t, h, "GET", "/v1/users/u1/inbox?limit=5", "k", "", "")
+	require.Equal(t, 200, rec.Code)
+	require.Contains(t, rec.Body.String(), `"next_cursor":"next"`)
+	require.Equal(t, 400, do(t, h, "GET", "/v1/users/u1/inbox?limit=500", "k", "", "").Code)
+	require.Equal(t, 400, do(t, h, "GET", "/v1/users/u1/inbox?cursor=bad", "k", "", "").Code)
+	require.Equal(t, 401, do(t, h, "GET", "/v1/users/u1/inbox", "", "", "").Code)
+
+	require.Equal(t, 204, do(t, h, "POST", "/v1/users/u1/inbox/1_n/read", "k", "", "").Code)
+	require.True(t, inbox.read["1_n"])
+	require.Equal(t, 404, do(t, h, "POST", "/v1/users/u1/inbox/zzz/read", "k", "", "").Code)
 }

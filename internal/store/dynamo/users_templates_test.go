@@ -4,9 +4,11 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"strings"
 	"testing"
 	"time"
 
+	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
 	"github.com/stretchr/testify/require"
 
 	"notification-service/internal/config"
@@ -81,4 +83,23 @@ func TestTemplateVersioning(t *testing.T) {
 
 	_, err = tpls.GetLatest(ctx, "otp", domain.ChannelSMS, "en-US")
 	require.ErrorIs(t, err, ErrNotFound)
+}
+
+func testEndpoint(t *testing.T) string {
+	t.Helper()
+	endpoint := os.Getenv("DYNAMO_ENDPOINT")
+	if endpoint == "" {
+		t.Skip("DYNAMO_ENDPOINT not set")
+	}
+	return endpoint
+}
+
+func repoFor(t *testing.T, tables Tables) (*Notifications, *dynamodb.Client) {
+	t.Helper()
+	prefix := strings.TrimSuffix(tables.Notifications, "notifications")
+	c := config.Dynamo{Endpoint: testEndpoint(t), Region: "us-east-1", TablePrefix: prefix}
+	awsCfg, err := LoadAWS(context.Background(), c)
+	require.NoError(t, err)
+	db := NewClient(awsCfg, c)
+	return NewNotifications(db, tables), db
 }

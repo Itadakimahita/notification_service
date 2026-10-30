@@ -44,7 +44,7 @@ func main() {
 		}
 		db := dynamo.NewClient(awsCfg, c.Dynamo)
 		tables := dynamo.NewTables(c.TablePrefix)
-		rdb := redis.NewClient(&redis.Options{Addr: c.Addr})
+		rdb := redis.NewClient(&redis.Options{Addr: c.Redis.Addr})
 		defer rdb.Close()
 
 		kc, err := kafkax.NewClient(c.Brokers,

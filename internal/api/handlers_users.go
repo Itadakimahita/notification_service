@@ -2,7 +2,9 @@ package api
 
 import (
 	"context"
+	"errors"
 	"net/http"
+	"strconv"
 	"time"
 
 	"github.com/go-chi/chi/v5"
@@ -10,6 +12,7 @@ import (
 	"notification-service/internal/domain"
 	"notification-service/internal/httpx"
 	"notification-service/internal/router"
+	"notification-service/internal/store/dynamo"
 	"notification-service/internal/templates"
 )
 
@@ -150,4 +153,41 @@ func (s *Server) putTemplate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	httpx.JSON(w, http.StatusCreated, saved)
+}
+
+type Inbox interface {
+	List(ctx context.Context, userID string, limit int32, cursor string) ([]dynamo.InboxItem, string, error)
+	MarkRead(ctx context.Context, userID, itemID string) error
+}
+
+// listInbox returns a page of a user's in-app messages, newest first.
+func (s *Server) listInbox(w http.ResponseWriter, r *http.Request) {
+	limit := 20
+	if v := r.URL.Query().Get("limit"); v != "" {
+		n, err := strconv.Atoi(v)
+		if err != nil || n < 1 || n > 100 {
+			httpx.Error(w, http.StatusBadRequest, "limit must be 1..100")
+			return
+		}
+		limit = n
+	}
+	items, next, err := s.inbox.List(r.Context(), chi.URLParam(r, "id"), int32(limit), r.URL.Query().Get("cursor"))
+	if err != nil {
+		httpx.Error(w, http.StatusBadRequest, "could not read inbox")
+		return
+	}
+	httpx.JSON(w, http.StatusOK, map[string]any{"items": items, "next_cursor": next})
+}
+
+// markRead flags one inbox item as read.
+func (s *Server) markRead(w http.ResponseWriter, r *http.Request) {
+	err := s.inbox.MarkRead(r.Context(), chi.URLParam(r, "id"), chi.URLParam(r, "item_id"))
+	switch {
+	case errors.Is(err, dynamo.ErrNotFound):
+		httpx.Error(w, http.StatusNotFound, "inbox item not found")
+	case err != nil:
+		httpx.Error(w, http.StatusInternalServerError, "failed to update inbox item")
+	default:
+		w.WriteHeader(http.StatusNoContent)
+	}
 }

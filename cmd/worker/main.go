@@ -67,7 +67,7 @@ func main() {
 		}
 		db := dynamo.NewClient(awsCfg, c.Dynamo)
 		tables := dynamo.NewTables(c.TablePrefix)
-		rdb := redis.NewClient(&redis.Options{Addr: c.Addr, PoolSize: 200})
+		rdb := redis.NewClient(&redis.Options{Addr: c.Redis.Addr, PoolSize: 200})
 		defer rdb.Close()
 
 		var sender channels.Sender

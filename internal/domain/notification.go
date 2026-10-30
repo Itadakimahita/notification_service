@@ -17,7 +17,10 @@ type Notification struct {
 	ExpiresAt     int64             `dynamodbav:"expires_at,omitempty" json:"expires_at,omitempty"`
 	CreatedAt     int64             `dynamodbav:"created_at" json:"created_at"`
 	Status        Status            `dynamodbav:"status" json:"status"`
-	ChannelStatus map[string]Status `dynamodbav:"channel_status,omitempty" json:"channel_status,omitempty"`
+	StatusRank    int               `dynamodbav:"status_rank" json:"-"`
+	ChannelStatus map[string]Status `dynamodbav:"channel_status" json:"channel_status"`
+	ChannelDetail map[string]string `dynamodbav:"channel_detail" json:"channel_detail,omitempty"`
+	ChannelRank   map[string]int    `dynamodbav:"channel_rank" json:"-"`
 	TTL           int64             `dynamodbav:"ttl" json:"-"`
 }
 

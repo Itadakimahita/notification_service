@@ -27,17 +27,26 @@ type Store interface {
 	Get(ctx context.Context, id string) (*domain.Notification, error)
 }
 
+type Deps struct {
+	Store     Store
+	Users     Users
+	Templates Templates
+	Inbox     Inbox
+	Auth      *Auth
+}
+
 type Server struct {
 	store     Store
 	users     Users
 	templates Templates
+	inbox     Inbox
 	auth      *Auth
 	now       func() time.Time
 }
 
 // NewServer builds the API server.
-func NewServer(store Store, users Users, templates Templates, auth *Auth) *Server {
-	return &Server{store: store, users: users, templates: templates, auth: auth, now: time.Now}
+func NewServer(d Deps) *Server {
+	return &Server{store: d.Store, users: d.Users, templates: d.Templates, inbox: d.Inbox, auth: d.Auth, now: time.Now}
 }
 
 // Router returns the HTTP handler tree.
@@ -54,6 +63,8 @@ func (s *Server) Router() http.Handler {
 		r.Post("/v1/users/{id}/devices", s.addDevice)
 		r.Delete("/v1/users/{id}/devices/{device_id}", s.removeDevice)
 		r.Post("/v1/templates", s.putTemplate)
+		r.Get("/v1/users/{id}/inbox", s.listInbox)
+		r.Post("/v1/users/{id}/inbox/{item_id}/read", s.markRead)
 	})
 	return r
 }

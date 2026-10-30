@@ -21,7 +21,7 @@ type cfg struct {
 	config.Base
 	config.Dynamo
 	config.Redis
-	Addr        string  `env:"API_ADDR" envDefault:":8080"`
+	ListenAddr  string  `env:"API_ADDR" envDefault:":8080"`
 	APIKeys     string  `env:"API_KEYS" envDefault:"demo:demo-key"`
 	ProducerRPS float64 `env:"PRODUCER_RPS" envDefault:"5000"`
 	ProducerBst int     `env:"PRODUCER_BURST" envDefault:"10000"`
@@ -58,13 +58,19 @@ func main() {
 		db := dynamo.NewClient(awsCfg, c.Dynamo)
 		tables := dynamo.NewTables(c.TablePrefix)
 		repo = dynamo.NewNotifications(db, tables)
-		rdb := redis.NewClient(&redis.Options{Addr: c.Addr})
+		rdb := redis.NewClient(&redis.Options{Addr: c.Redis.Addr})
 		defer rdb.Close()
 		userSvc := users.NewService(dynamo.NewUsers(db, tables), rdb, 5*time.Minute)
 
 		srv := &http.Server{
-			Addr:              c.Addr,
-			Handler:           api.NewServer(repo, userSvc, dynamo.NewTemplates(db, tables), api.NewAuth(keys, c.ProducerRPS, c.ProducerBst)).Router(),
+			Addr: c.ListenAddr,
+			Handler: api.NewServer(api.Deps{
+				Store:     repo,
+				Users:     userSvc,
+				Templates: dynamo.NewTemplates(db, tables),
+				Inbox:     dynamo.NewInbox(db, tables),
+				Auth:      api.NewAuth(keys, c.ProducerRPS, c.ProducerBst),
+			}).Router(),
 			ReadHeaderTimeout: 5 * time.Second,
 		}
 		go func() {
@@ -73,7 +79,7 @@ func main() {
 			defer cancel()
 			_ = srv.Shutdown(shutdown)
 		}()
-		rt.Log.Info("listening", "addr", c.Addr)
+		rt.Log.Info("listening", "addr", c.ListenAddr)
 		if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 			return fmt.Errorf("serve: %w", err)
 		}

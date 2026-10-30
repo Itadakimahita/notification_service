@@ -59,3 +59,20 @@ const (
 	StatusSuppressed Status = "SUPPRESSED"
 	StatusExpired    Status = "EXPIRED"
 )
+
+// Rank orders statuses so late or duplicate events can never move a notification backwards.
+func (s Status) Rank() int {
+	switch s {
+	case StatusScheduled:
+		return 1
+	case StatusRouted, StatusQueued:
+		return 2
+	case StatusFailed, StatusSuppressed, StatusExpired:
+		return 3
+	case StatusSent:
+		return 4
+	case StatusDelivered:
+		return 5
+	}
+	return 0
+}
