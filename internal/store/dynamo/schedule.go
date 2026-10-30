@@ -2,6 +2,7 @@ package dynamo
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"hash/fnv"
 	"time"
@@ -41,4 +42,64 @@ func (r *Schedule) Put(ctx context.Context, notificationID, variant string, due 
 		},
 	})
 	return err
+}
+
+type ScheduledItem struct {
+	PK      string
+	SK      string
+	Payload []byte
+}
+
+// Due returns up to limit items in a bucket whose due time is at or before nowUnix.
+func (r *Schedule) Due(ctx context.Context, minute int64, shard int, nowUnix int64, limit int32) ([]ScheduledItem, error) {
+	pk := fmt.Sprintf("%d#%02d", minute, shard)
+	out, err := r.db.Query(ctx, &dynamodb.QueryInput{
+		TableName:              aws.String(r.t.Schedule),
+		KeyConditionExpression: aws.String("pk = :pk AND sk <= :max"),
+		ExpressionAttributeValues: map[string]types.AttributeValue{
+			":pk":  &types.AttributeValueMemberS{Value: pk},
+			":max": &types.AttributeValueMemberS{Value: fmt.Sprintf("%012d~", nowUnix)},
+		},
+		ConsistentRead: aws.Bool(true),
+		Limit:          aws.Int32(limit),
+	})
+	if err != nil {
+		return nil, err
+	}
+	items := make([]ScheduledItem, 0, len(out.Items))
+	for _, it := range out.Items {
+		sk, _ := it[AttrSK].(*types.AttributeValueMemberS)
+		payload, _ := it["payload"].(*types.AttributeValueMemberB)
+		if sk == nil || payload == nil {
+			continue
+		}
+		items = append(items, ScheduledItem{PK: pk, SK: sk.Value, Payload: payload.Value})
+	}
+	return items, nil
+}
+
+// Delete removes emitted items in batches of 25, retrying unprocessed ones.
+func (r *Schedule) Delete(ctx context.Context, items []ScheduledItem) error {
+	for start := 0; start < len(items); start += 25 {
+		end := min(start+25, len(items))
+		reqs := make([]types.WriteRequest, 0, end-start)
+		for _, it := range items[start:end] {
+			reqs = append(reqs, types.WriteRequest{DeleteRequest: &types.DeleteRequest{Key: map[string]types.AttributeValue{
+				AttrPK: &types.AttributeValueMemberS{Value: it.PK},
+				AttrSK: &types.AttributeValueMemberS{Value: it.SK},
+			}}})
+		}
+		pending := map[string][]types.WriteRequest{r.t.Schedule: reqs}
+		for attempt := 0; len(pending) > 0; attempt++ {
+			if attempt >= 5 {
+				return errors.New("schedule delete: unprocessed items remain")
+			}
+			out, err := r.db.BatchWriteItem(ctx, &dynamodb.BatchWriteItemInput{RequestItems: pending})
+			if err != nil {
+				return err
+			}
+			pending = out.UnprocessedItems
+		}
+	}
+	return nil
 }
