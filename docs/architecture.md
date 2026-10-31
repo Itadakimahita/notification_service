@@ -1,4 +1,6 @@
-# Notification Platform — Architecture
+# Notification Platform — Design Plan
+
+> This is the design written before implementation. See the [README](../README.md) for what was built and [benchmarks](benchmarks.md) for measured results. Differences: the API listens on 8081, status events are produced by the router and workers and applied by the status service, and the Kubernetes manifests use Kustomize and KEDA instead of Helm.
 
 ## Context
 The repo (`/Users/dika/Documents/highload/notification_service`) is empty (only `CLAUDE.md`). We are building a portfolio-grade, high-load notification platform from the user's whiteboard design (push / email / SMS / in-app, 200M/day, 23K/s peak, p95 enqueue < 100 ms, at-least-once + idempotency).

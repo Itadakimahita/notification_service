@@ -6,7 +6,7 @@ export S3_ENDPOINT ?= http://localhost:9300
 export REDIS_ADDR ?= localhost:6380
 export OTEL_EXPORTER_OTLP_ENDPOINT ?= localhost:4317
 
-.PHONY: up down logs migrate build test test-unit lint proto tidy images k8s-test loadtest chaos
+.PHONY: run stop up down logs migrate build test test-unit lint proto tidy images k8s-test loadtest chaos
 
 up:
 	$(COMPOSE) up -d --wait
@@ -52,3 +52,9 @@ loadtest:
 
 chaos:
 	./loadtest/chaos.sh
+
+run:
+	./scripts/dev.sh start
+
+stop:
+	./scripts/dev.sh stop
