@@ -21,7 +21,7 @@ The producer uploads the audience CSV straight to object storage using a presign
 - No automatic backpressure from consumer lag yet. The rate is fixed per campaign.
 
 ## Evidence
-Measured: unit tests with fakes (parsing, column overrides, pause and resume without gaps or duplicates, cancel, missing file, crash resume, throttling) and an integration test against real DynamoDB and an in-process S3 server. **Not run:** a live campaign against a real S3 container, and the campaign plus transactional mix.
+Measured: unit tests with fakes (parsing, column overrides, pause and resume without gaps or duplicates, cancel, missing file, crash resume, throttling) and an integration test against real DynamoDB and an in-process S3 server. A live run also completed: a 100 recipient campaign uploaded through a presigned URL to the S3Mock container ran to `COMPLETED` with 100 emitted. **Not run:** a campaign at volume, and the campaign plus transactional mix.
 
 ## Revisit when
 Audiences reach tens of millions (consider a direct-to-Kafka path with a separate dedupe), or lag-based backpressure is needed.

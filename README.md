@@ -4,18 +4,22 @@ A high-load notification service: push, email, SMS and in-app messages, sent imm
 
 Design target: 100M daily active users, 200M notifications per day (2.3K/s average, 23K/s peak), enqueue p95 under 100 ms, durable acceptance and at-least-once delivery.
 
-| Read | For |
-|---|---|
-| This file | How it works, with diagrams. How to run it |
-| [docs/decisions/](docs/decisions/README.md) | One file per design choice: why it was chosen and why it is better |
+
+| Read                                           | For                                                                   |
+| ---------------------------------------------- | --------------------------------------------------------------------- |
+| This file                                      | How it works, with diagrams. How to run it                            |
+| [docs/decisions/](docs/decisions/README.md)    | One file per design choice: why it was chosen and why it is better    |
 | [docs/observability.md](docs/observability.md) | Metrics catalogue, the Grafana dashboard, p50/p95/p99, alerts, traces |
-| [docs/benchmarks.md](docs/benchmarks.md) | Measured results and what was not measured |
-| [docs/kubernetes.md](docs/kubernetes.md) | Cluster manifests and scaling |
-| [docs/architecture.md](docs/architecture.md) | The original design plan |
+| [docs/benchmarks.md](docs/benchmarks.md)       | Measured results and what was not measured                            |
+| [docs/kubernetes.md](docs/kubernetes.md)       | Cluster manifests and scaling                                         |
+| [docs/architecture.md](docs/architecture.md)   | The original design plan                                              |
+| [docs/defense.md](docs/defense.md)             | How to run it, the demo script, what to say and what to avoid claiming |
 
 The diagrams below use Mermaid and render on GitHub and in most editors.
 
 ---
+
+![1793419684751](images/README/1793419684751.png)
 
 ## 1. The system at a glance
 
@@ -492,35 +496,37 @@ make stop
 make test      # unit and integration tests (integration tests skip without the compose stack)
 ```
 
-| Service | Ports (service / metrics) |
-|---|---|
-| api | 8081 / 9101 |
-| relay, router, scheduler | - / 9102, 9103, 9106 |
-| status (webhooks) | 8082 / 9107 |
-| inapp (WebSocket) | 8083 / 9108 |
-| workers push, email, inapp, sms | - / 9104, 9114, 9124, 9134 |
+
+| Service                             | Ports (service / metrics)            |
+| ----------------------------------- | ------------------------------------ |
+| api                                 | 8081 / 9101                          |
+| relay, router, scheduler            | - / 9102, 9103, 9106                 |
+| status (webhooks)                   | 8082 / 9107                          |
+| inapp (WebSocket)                   | 8083 / 9108                          |
+| workers push, email, inapp, sms     | - / 9104, 9114, 9124, 9134           |
 | campaign, lagexporter, mockprovider | - / 9109, 9110, 9105 (provider 9200) |
 
 Tools: Grafana :3000, Prometheus :9090, Jaeger :16686, Mailpit :8025, Kafka UI :8090, DynamoDB admin :8001. Host ports 6380 (Redis) and 9300 (S3) are shifted from the defaults to avoid clashing with other local software.
 
-Other commands: `make loadtest`, `make chaos`, `make images`, `make k8s-test`, `python3 scripts/gen_dashboard.py`, `python3 scripts/check_dashboard.py`.
+Scripted demo: `./scripts/demo.sh help` (see [docs/defense.md](docs/defense.md)). Other commands: `make loadtest`, `make chaos`, `make images`, `make k8s-test`, `python3 scripts/gen_dashboard.py`, `python3 scripts/check_dashboard.py`.
 
 ## API
 
 All routes need `Authorization: ApiKey <key>`.
 
-| Method and path | Purpose |
-|---|---|
-| `POST /v1/notifications` (`Idempotency-Key` header) | Accept one notification, returns 202 |
-| `POST /v1/notifications/batch` | Up to 1000, per-item results |
-| `GET /v1/notifications/{id}` | Overall and per-channel status |
-| `PUT /v1/users/{id}`, `PUT /v1/users/{id}/preferences` | Profile, per category and channel preferences with quiet hours |
-| `POST /v1/users/{id}/devices`, `DELETE .../devices/{device_id}` | Push tokens |
-| `POST /v1/templates` | New template version (per channel and locale) |
-| `GET /v1/users/{id}/inbox`, `POST .../inbox/{item}/read` | In-app inbox |
-| `POST /v1/campaigns`, `GET/POST /v1/campaigns/{id}[/start,pause,resume,cancel]` | Bulk campaigns, audience CSV uploaded to a presigned URL |
-| `POST /v1/webhooks/{provider}` (status service, `X-Webhook-Key`) | Provider delivery callbacks |
-| `GET /v1/ws?user_id=` (inapp service) | Live in-app messages |
+
+| Method and path                                                                 | Purpose                                                        |
+| ------------------------------------------------------------------------------- | -------------------------------------------------------------- |
+| `POST /v1/notifications` (`Idempotency-Key` header)                             | Accept one notification, returns 202                           |
+| `POST /v1/notifications/batch`                                                  | Up to 1000, per-item results                                   |
+| `GET /v1/notifications/{id}`                                                    | Overall and per-channel status                                 |
+| `PUT /v1/users/{id}`, `PUT /v1/users/{id}/preferences`                          | Profile, per category and channel preferences with quiet hours |
+| `POST /v1/users/{id}/devices`, `DELETE .../devices/{device_id}`                 | Push tokens                                                    |
+| `POST /v1/templates`                                                            | New template version (per channel and locale)                  |
+| `GET /v1/users/{id}/inbox`, `POST .../inbox/{item}/read`                        | In-app inbox                                                   |
+| `POST /v1/campaigns`, `GET/POST /v1/campaigns/{id}[/start,pause,resume,cancel]` | Bulk campaigns, audience CSV uploaded to a presigned URL       |
+| `POST /v1/webhooks/{provider}` (status service, `X-Webhook-Key`)                | Provider delivery callbacks                                    |
+| `GET /v1/ws?user_id=` (inapp service)                                           | Live in-app messages                                           |
 
 ## Not done, and what I would improve
 

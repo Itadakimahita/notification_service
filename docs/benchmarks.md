@@ -11,7 +11,7 @@ These numbers come from one developer laptop and say what this build does locall
 | Sustained load, accept path | Run at 500, 2000 and 4000 req/s |
 | 23K/s burst | **Not run.** One laptop with DynamoDB Local cannot generate or absorb it |
 | 30 minute soak | **Not run** |
-| Campaign plus transactional mix | **Not run** (campaign runner is covered by tests and a protocol-level integration test) |
+| Campaign plus transactional mix | **Not run.** The campaign runner is covered by tests, and a 100 recipient campaign completed live against the S3Mock container |
 | Provider at 50% errors and high latency | Run, passed |
 | Kill a worker | Run, passed |
 | Stop a Kafka broker | Run, passed |
