@@ -1,0 +1,80 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: notifications
+
+resources:
+  - ../../base
+  - deps/kafka.yaml
+  - deps/dynamodb.yaml
+  - deps/redis.yaml
+  - deps/mailpit.yaml
+  - mockprovider.yaml
+  - migrate-job.yaml
+
+secretGenerator:
+  - name: notif-secrets
+    literals:
+      - API_KEYS=demo:demo-key
+      - WEBHOOK_KEYS=mock:mock-webhook-key
+generatorOptions:
+  disableNameSuffixHash: true
+
+images:
+  - { name: notif-api, newName: notif-api, newTag: dev }
+  - { name: notif-relay, newName: notif-relay, newTag: dev }
+  - { name: notif-router, newName: notif-router, newTag: dev }
+  - { name: notif-scheduler, newName: notif-scheduler, newTag: dev }
+  - { name: notif-status, newName: notif-status, newTag: dev }
+  - { name: notif-inapp, newName: notif-inapp, newTag: dev }
+  - { name: notif-campaign, newName: notif-campaign, newTag: dev }
+  - { name: notif-lagexporter, newName: notif-lagexporter, newTag: dev }
+  - { name: notif-worker, newName: notif-worker, newTag: dev }
+
+replicas:
+  - { name: api, count: 1 }
+  - { name: relay, count: 1 }
+  - { name: router, count: 1 }
+  - { name: scheduler, count: 1 }
+  - { name: status, count: 1 }
+  - { name: inapp, count: 1 }
+  - { name: campaign, count: 1 }
+  - { name: worker-push, count: 1 }
+  - { name: worker-email, count: 1 }
+  - { name: worker-sms, count: 1 }
+  - { name: worker-inapp, count: 1 }
+
+patches:
+  - target: { kind: ConfigMap, name: notif-config }
+    patch: |-
+      - op: replace
+        path: /data/DYNAMO_ENDPOINT
+        value: http://dynamodb.notifications.svc:8000
+      - op: add
+        path: /data/PROVIDER_URL
+        value: http://mockprovider.notifications.svc:9200
+      - op: add
+        path: /data/SMTP_ADDR
+        value: mailpit.notifications.svc:1025
+  - target: { kind: Service, name: api }
+    patch: |-
+      - op: add
+        path: /spec/type
+        value: NodePort
+      - op: add
+        path: /spec/ports/0/nodePort
+        value: 30081
+  # autoscalers need metrics-server and the KEDA operator, neither of which kind ships with
+  - target: { kind: HorizontalPodAutoscaler }
+    patch: |-
+      $patch: delete
+      apiVersion: autoscaling/v2
+      kind: HorizontalPodAutoscaler
+      metadata:
+        name: ignored
+  - target: { kind: ScaledObject }
+    patch: |-
+      $patch: delete
+      apiVersion: keda.sh/v1alpha1
+      kind: ScaledObject
+      metadata:
+        name: ignored

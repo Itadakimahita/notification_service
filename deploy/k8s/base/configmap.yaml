@@ -1,0 +1,17 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: notif-config
+data:
+  ADMIN_ADDR: ":9100"
+  LOG_LEVEL: info
+  KAFKA_BROKERS: kafka.notifications.svc:9092
+  DYNAMO_ENDPOINT: ""
+  DYNAMO_TABLE_PREFIX: notif_
+  AWS_REGION: us-east-1
+  REDIS_ADDR: redis.notifications.svc:6379
+  S3_ENDPOINT: ""
+  S3_BUCKET: notif-campaigns
+  OTEL_EXPORTER_OTLP_ENDPOINT: ""
+  MARKETING_DAILY_CAP: "3"
+  PROVIDER_RPS: "20000"

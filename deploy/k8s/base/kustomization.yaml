@@ -1,0 +1,21 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: notifications
+resources:
+  - namespace.yaml
+  - configmap.yaml
+  - api.yaml
+  - relay.yaml
+  - router.yaml
+  - scheduler.yaml
+  - status.yaml
+  - inapp.yaml
+  - campaign.yaml
+  - lagexporter.yaml
+  - worker-push.yaml
+  - worker-email.yaml
+  - worker-sms.yaml
+  - worker-inapp.yaml
+  - pdb.yaml
+  - hpa.yaml
+  - keda.yaml

@@ -1,0 +1,141 @@
+apiVersion: keda.sh/v1alpha1
+kind: ScaledObject
+metadata:
+  name: router
+spec:
+  scaleTargetRef:
+    name: router
+  minReplicaCount: 3
+  maxReplicaCount: 48
+  cooldownPeriod: 300
+  triggers:
+    - type: kafka
+      metadata:
+        bootstrapServers: kafka.notifications.svc:9092
+        consumerGroup: router
+        topic: notifications.requested
+        lagThreshold: "500"
+        activationLagThreshold: "10"
+---
+apiVersion: keda.sh/v1alpha1
+kind: ScaledObject
+metadata:
+  name: status
+spec:
+  scaleTargetRef:
+    name: status
+  minReplicaCount: 3
+  maxReplicaCount: 24
+  cooldownPeriod: 300
+  triggers:
+    - type: kafka
+      metadata:
+        bootstrapServers: kafka.notifications.svc:9092
+        consumerGroup: status
+        topic: notifications.status
+        lagThreshold: "2000"
+        activationLagThreshold: "10"
+---
+apiVersion: keda.sh/v1alpha1
+kind: ScaledObject
+metadata:
+  name: worker-push
+spec:
+  scaleTargetRef:
+    name: worker-push
+  minReplicaCount: 2
+  maxReplicaCount: 48
+  cooldownPeriod: 300
+  triggers:
+    - type: kafka
+      metadata:
+        bootstrapServers: kafka.notifications.svc:9092
+        consumerGroup: worker-push-high
+        topic: notifications.dispatch.push.high
+        lagThreshold: "200"
+        activationLagThreshold: "10"
+    - type: kafka
+      metadata:
+        bootstrapServers: kafka.notifications.svc:9092
+        consumerGroup: worker-push-low
+        topic: notifications.dispatch.push.low
+        lagThreshold: "1000"
+        activationLagThreshold: "10"
+---
+apiVersion: keda.sh/v1alpha1
+kind: ScaledObject
+metadata:
+  name: worker-email
+spec:
+  scaleTargetRef:
+    name: worker-email
+  minReplicaCount: 2
+  maxReplicaCount: 48
+  cooldownPeriod: 300
+  triggers:
+    - type: kafka
+      metadata:
+        bootstrapServers: kafka.notifications.svc:9092
+        consumerGroup: worker-email-high
+        topic: notifications.dispatch.email.high
+        lagThreshold: "200"
+        activationLagThreshold: "10"
+    - type: kafka
+      metadata:
+        bootstrapServers: kafka.notifications.svc:9092
+        consumerGroup: worker-email-low
+        topic: notifications.dispatch.email.low
+        lagThreshold: "1000"
+        activationLagThreshold: "10"
+---
+apiVersion: keda.sh/v1alpha1
+kind: ScaledObject
+metadata:
+  name: worker-sms
+spec:
+  scaleTargetRef:
+    name: worker-sms
+  minReplicaCount: 2
+  maxReplicaCount: 48
+  cooldownPeriod: 300
+  triggers:
+    - type: kafka
+      metadata:
+        bootstrapServers: kafka.notifications.svc:9092
+        consumerGroup: worker-sms-high
+        topic: notifications.dispatch.sms.high
+        lagThreshold: "200"
+        activationLagThreshold: "10"
+    - type: kafka
+      metadata:
+        bootstrapServers: kafka.notifications.svc:9092
+        consumerGroup: worker-sms-low
+        topic: notifications.dispatch.sms.low
+        lagThreshold: "1000"
+        activationLagThreshold: "10"
+---
+apiVersion: keda.sh/v1alpha1
+kind: ScaledObject
+metadata:
+  name: worker-inapp
+spec:
+  scaleTargetRef:
+    name: worker-inapp
+  minReplicaCount: 2
+  maxReplicaCount: 48
+  cooldownPeriod: 300
+  triggers:
+    - type: kafka
+      metadata:
+        bootstrapServers: kafka.notifications.svc:9092
+        consumerGroup: worker-inapp-high
+        topic: notifications.dispatch.inapp.high
+        lagThreshold: "200"
+        activationLagThreshold: "10"
+    - type: kafka
+      metadata:
+        bootstrapServers: kafka.notifications.svc:9092
+        consumerGroup: worker-inapp-low
+        topic: notifications.dispatch.inapp.low
+        lagThreshold: "1000"
+        activationLagThreshold: "10"

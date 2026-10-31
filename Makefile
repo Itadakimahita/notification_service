@@ -6,7 +6,7 @@ export S3_ENDPOINT ?= http://localhost:9300
 export REDIS_ADDR ?= localhost:6380
 export OTEL_EXPORTER_OTLP_ENDPOINT ?= localhost:4317
 
-.PHONY: up down logs migrate build test test-unit lint proto tidy
+.PHONY: up down logs migrate build test test-unit lint proto tidy images k8s-test loadtest chaos
 
 up:
 	$(COMPOSE) up -d --wait
@@ -38,3 +38,17 @@ proto:
 
 tidy:
 	go mod tidy
+
+images:
+	for s in api relay router scheduler status inapp campaign lagexporter worker mockprovider migrate; do \
+		docker build --build-arg SERVICE=$$s -t notif-$$s:dev . || exit 1; \
+	done
+
+k8s-test:
+	go test ./deploy/...
+
+loadtest:
+	go run ./cmd/loadgen -rate 500 -duration 30s
+
+chaos:
+	./loadtest/chaos.sh

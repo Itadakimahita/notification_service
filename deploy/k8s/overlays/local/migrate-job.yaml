@@ -1,0 +1,16 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: migrate
+spec:
+  backoffLimit: 10
+  template:
+    spec:
+      restartPolicy: OnFailure
+      containers:
+        - name: migrate
+          image: notif-migrate:dev
+          envFrom:
+            - configMapRef: { name: notif-config }
+          env:
+            - { name: KAFKA_REPLICATION, value: "1" }
