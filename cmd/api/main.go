@@ -23,7 +23,7 @@ type cfg struct {
 	config.Dynamo
 	config.Redis
 	config.S3
-	ListenAddr  string  `env:"API_ADDR" envDefault:":8080"`
+	ListenAddr  string  `env:"API_ADDR" envDefault:":8081"`
 	APIKeys     string  `env:"API_KEYS" envDefault:"demo:demo-key"`
 	ProducerRPS float64 `env:"PRODUCER_RPS" envDefault:"5000"`
 	ProducerBst int     `env:"PRODUCER_BURST" envDefault:"10000"`

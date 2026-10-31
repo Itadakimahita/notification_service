@@ -97,19 +97,26 @@ func respond(w http.ResponseWriter, kind string, code int, body any) {
 	}
 }
 
+// deliver posts the delivery callback, retrying with backoff like a real provider would.
 func (s *server) deliver(kind, notificationID, providerID string) {
 	time.Sleep(time.Duration(50+rand.IntN(250)) * time.Millisecond)
 	body, _ := json.Marshal(map[string]string{
 		"notification_id": notificationID, "channel": kind, "provider_message_id": providerID, "status": "delivered",
 	})
-	req, err := http.NewRequest(http.MethodPost, s.webhook, bytes.NewReader(body))
-	if err != nil {
-		return
-	}
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("X-Webhook-Key", s.key)
-	if resp, err := s.client.Do(req); err == nil {
-		resp.Body.Close()
+	for attempt := 0; attempt < 6; attempt++ {
+		req, err := http.NewRequest(http.MethodPost, s.webhook, bytes.NewReader(body))
+		if err != nil {
+			return
+		}
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("X-Webhook-Key", s.key)
+		if resp, err := s.client.Do(req); err == nil {
+			resp.Body.Close()
+			if resp.StatusCode/100 == 2 {
+				return
+			}
+		}
+		time.Sleep(time.Duration(200<<attempt) * time.Millisecond)
 	}
 }
 
