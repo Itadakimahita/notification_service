@@ -1,0 +1,64 @@
+groups:
+  - name: notification-platform
+    rules:
+      - alert: ApiEnqueueLatencyHigh
+        expr: histogram_quantile(0.95, sum by (le) (rate(http_request_duration_seconds_bucket{job="api",route="/v1/notifications",method="POST"}[5m]))) > 0.1
+        for: 5m
+        labels: { severity: page }
+        annotations:
+          summary: "API enqueue p95 above the 100 ms target"
+
+      - alert: ApiErrorRateHigh
+        expr: sum(rate(http_request_duration_seconds_count{job="api",status=~"5.."}[5m])) / sum(rate(http_request_duration_seconds_count{job="api"}[5m])) > 0.01
+        for: 5m
+        labels: { severity: page }
+        annotations:
+          summary: "More than 1% of API requests fail with 5xx"
+
+      - alert: ConsumerLagHigh
+        expr: max by (group, topic) (kafka_consumer_lag{group!~".*retry.*"}) > 100000
+        for: 5m
+        labels: { severity: page }
+        annotations:
+          summary: "Consumer group {{ $labels.group }} is more than 100k messages behind on {{ $labels.topic }}"
+
+      - alert: DeadLetterGrowing
+        expr: sum by (topic) (delta(notification_dlq_depth[15m])) > 0
+        labels: { severity: ticket }
+        annotations:
+          summary: "Dead-letter topic {{ $labels.topic }} is growing"
+
+      - alert: ProviderFailureRatioHigh
+        expr: sum by (channel) (rate(worker_send_total{result=~"retry|dead|permanent"}[5m])) / sum by (channel) (rate(worker_send_total[5m])) > 0.2
+        for: 5m
+        labels: { severity: page }
+        annotations:
+          summary: "More than 20% of {{ $labels.channel }} sends fail"
+
+      - alert: ProviderBreakerOpen
+        expr: sum by (channel) (rate(worker_send_total{result="breaker_open"}[2m])) > 0
+        for: 2m
+        labels: { severity: page }
+        annotations:
+          summary: "Circuit breaker is open for the {{ $labels.channel }} provider"
+
+      - alert: RelayHasNoShards
+        expr: max(relay_owned_shards) == 0
+        for: 2m
+        labels: { severity: page }
+        annotations:
+          summary: "No relay instance owns a DynamoDB stream shard, so accepted notifications are not being published"
+
+      - alert: SchedulerHasNoShards
+        expr: max(scheduler_owned_shards) == 0
+        for: 2m
+        labels: { severity: page }
+        annotations:
+          summary: "No scheduler instance holds a schedule shard, so delayed notifications will not fire"
+
+      - alert: ServiceDown
+        expr: up == 0
+        for: 2m
+        labels: { severity: page }
+        annotations:
+          summary: "{{ $labels.job }} ({{ $labels.instance }}) is not reachable"

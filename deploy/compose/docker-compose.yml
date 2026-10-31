@@ -110,6 +110,7 @@ services:
     ports: ["9090:9090"]
     volumes:
       - ../prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ../prometheus/alerts.yml:/etc/prometheus/alerts.yml:ro
     extra_hosts: ["host.docker.internal:host-gateway"]
 
   grafana:
@@ -120,4 +121,5 @@ services:
       GF_AUTH_ANONYMOUS_ORG_ROLE: Admin
     volumes:
       - ../grafana/provisioning:/etc/grafana/provisioning:ro
+      - ../grafana/dashboards:/var/lib/grafana/dashboards:ro
     depends_on: [prometheus]

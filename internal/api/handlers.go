@@ -9,6 +9,9 @@ import (
 	"time"
 
 	"github.com/go-chi/chi/v5"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/propagation"
 
 	"notification-service/internal/domain"
 	"notification-service/internal/httpx"
@@ -84,10 +87,16 @@ type createResponse struct {
 }
 
 func (s *Server) accept(ctx context.Context, req createRequest, idemKey string) (createResponse, int, error) {
+	ctx, span := otel.Tracer("api").Start(ctx, "notification.accept")
+	defer span.End()
 	n, err := req.build(Producer(ctx), s.now())
 	if err != nil {
 		return createResponse{}, http.StatusBadRequest, err
 	}
+	span.SetAttributes(attribute.String("notification_id", n.ID))
+	carrier := propagation.MapCarrier{}
+	otel.GetTextMapPropagator().Inject(ctx, carrier)
+	n.TraceParent = carrier.Get("traceparent")
 	id, created, err := s.store.Create(ctx, n, idemKey)
 	if err != nil {
 		return createResponse{}, http.StatusInternalServerError, errors.New("failed to persist notification")

@@ -209,12 +209,16 @@ func toKafka(records []sttypes.Record, topic string) ([]*kgo.Record, error) {
 		if err != nil {
 			return nil, err
 		}
-		out = append(out, &kgo.Record{
+		rec := &kgo.Record{
 			Topic:   topic,
 			Key:     []byte(n.UserID),
 			Value:   val,
 			Headers: []kgo.RecordHeader{{Key: "notification_id", Value: []byte(n.ID)}},
-		})
+		}
+		if n.TraceParent != "" {
+			rec.Headers = append(rec.Headers, kgo.RecordHeader{Key: "traceparent", Value: []byte(n.TraceParent)})
+		}
+		out = append(out, rec)
 	}
 	return out, nil
 }

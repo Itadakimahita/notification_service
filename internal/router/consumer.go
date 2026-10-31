@@ -9,6 +9,8 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promauto"
 	"github.com/twmb/franz-go/pkg/kgo"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
 	"google.golang.org/protobuf/proto"
 
 	"notification-service/internal/domain"
@@ -41,6 +43,8 @@ func (c *Consumer) Run(ctx context.Context) error {
 
 // handleRecord routes one record, retrying infrastructure errors until they clear.
 func (c *Consumer) handleRecord(ctx context.Context, rec *kgo.Record) []*kgo.Record {
+	ctx, span := otel.Tracer("router").Start(kafkax.ExtractTrace(ctx, rec), "router.route")
+	defer span.End()
 	var req pb.NotificationRequested
 	if err := proto.Unmarshal(rec.Value, &req); err != nil {
 		processed.WithLabelValues("poison").Inc()
@@ -70,6 +74,7 @@ func (c *Consumer) handleRecord(ctx context.Context, rec *kgo.Record) []*kgo.Rec
 		}
 	}
 	processed.WithLabelValues("ok").Inc()
+	span.SetAttributes(attribute.String("notification_id", req.NotificationId), attribute.Int("dispatch", len(out.Dispatch)), attribute.Int("deferred", len(out.Deferred)))
 
 	var produced []*kgo.Record
 	for _, d := range out.Dispatch {
@@ -84,6 +89,9 @@ func (c *Consumer) handleRecord(ctx context.Context, rec *kgo.Record) []*kgo.Rec
 	for _, s := range out.Status {
 		val, _ := proto.Marshal(s)
 		produced = append(produced, &kgo.Record{Topic: kafkax.TopicStatus, Key: []byte(s.NotificationId), Value: val})
+	}
+	for _, p := range produced {
+		kafkax.InjectTrace(ctx, p)
 	}
 	return produced
 }

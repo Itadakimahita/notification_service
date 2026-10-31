@@ -7,6 +7,8 @@ import (
 	"time"
 
 	"github.com/twmb/franz-go/pkg/kgo"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
 	"google.golang.org/protobuf/proto"
 
 	pb "notification-service/internal/events/notification/v1"
@@ -31,6 +33,8 @@ func (c *Consumer) Run(ctx context.Context) error {
 
 // handle decodes a record, honors retry delays, and converts the outcome into follow-up records.
 func (c *Consumer) handle(ctx context.Context, rec *kgo.Record) []*kgo.Record {
+	ctx, span := otel.Tracer("worker").Start(kafkax.ExtractTrace(ctx, rec), "worker.send")
+	defer span.End()
 	var msg pb.DispatchMessage
 	if err := proto.Unmarshal(rec.Value, &msg); err != nil {
 		c.Log.Error("undecodable dispatch message", "topic", rec.Topic, "offset", rec.Offset, "err", err)
@@ -57,7 +61,12 @@ func (c *Consumer) handle(ctx context.Context, rec *kgo.Record) []*kgo.Record {
 		case <-time.After(backoff):
 		}
 	}
-	return c.records(&res)
+	span.SetAttributes(attribute.String("notification_id", msg.NotificationId), attribute.String("channel", msg.Channel), attribute.Int("attempt", int(msg.Attempt)))
+	out := c.records(&res)
+	for _, r := range out {
+		kafkax.InjectTrace(ctx, r)
+	}
+	return out
 }
 
 func (c *Consumer) records(res *Result) []*kgo.Record {

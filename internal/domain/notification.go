@@ -25,6 +25,7 @@ type Notification struct {
 	ChannelStatus map[string]Status `dynamodbav:"channel_status" json:"channel_status"`
 	ChannelDetail map[string]string `dynamodbav:"channel_detail" json:"channel_detail,omitempty"`
 	ChannelRank   map[string]int    `dynamodbav:"channel_rank" json:"-"`
+	TraceParent   string            `dynamodbav:"traceparent,omitempty" json:"-"`
 	TTL           int64             `dynamodbav:"ttl" json:"-"`
 }
 

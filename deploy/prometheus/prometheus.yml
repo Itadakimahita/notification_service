@@ -1,13 +1,33 @@
 global:
   scrape_interval: 5s
+  evaluation_interval: 15s
+
+rule_files:
+  - /etc/prometheus/alerts.yml
 
 scrape_configs:
-  - job_name: notification-services
+  - job_name: api
+    static_configs: [{ targets: ["host.docker.internal:9101"] }]
+  - job_name: relay
+    static_configs: [{ targets: ["host.docker.internal:9102"] }]
+  - job_name: router
+    static_configs: [{ targets: ["host.docker.internal:9103"] }]
+  - job_name: worker
     static_configs:
       - targets:
-          - host.docker.internal:9101
-          - host.docker.internal:9102
-          - host.docker.internal:9103
           - host.docker.internal:9104
-          - host.docker.internal:9105
-          - host.docker.internal:9106
+          - host.docker.internal:9114
+          - host.docker.internal:9124
+          - host.docker.internal:9134
+  - job_name: mockprovider
+    static_configs: [{ targets: ["host.docker.internal:9105"] }]
+  - job_name: scheduler
+    static_configs: [{ targets: ["host.docker.internal:9106"] }]
+  - job_name: status
+    static_configs: [{ targets: ["host.docker.internal:9107"] }]
+  - job_name: inapp
+    static_configs: [{ targets: ["host.docker.internal:9108"] }]
+  - job_name: campaign
+    static_configs: [{ targets: ["host.docker.internal:9109"] }]
+  - job_name: lagexporter
+    static_configs: [{ targets: ["host.docker.internal:9110"] }]
